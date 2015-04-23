@@ -6,17 +6,20 @@ import java.util.*;
  */
 public class KnapsackSolver {
 
+    private static final int MAX_SAME_RESULT = 100;
+
     private final ConnectionHandler connectionHandler;
     private final List<Item> items;
     private final int maxWeight;
-    private int random = 0;
+    private double random = 0;
 
     public KnapsackSolver(ConnectionHandler connectionHandler, KnapsackInput knapsackInput) {
         this.connectionHandler = connectionHandler;
         this.items = knapsackInput.getItems();
         this.maxWeight = knapsackInput.getMaxWeight();
         Random random = new Random();
-        this.random = random.nextInt(10000)/10000;
+        this.random = random.nextInt(10000) / 10000;
+        System.out.println("random:" + this.random);
     }
 
     public void run() {
@@ -56,68 +59,80 @@ public class KnapsackSolver {
     }
 
     public void run2() {
-        int limit = 50; // knapsack weight limit
         int pop = 250; // chromosome population size
         int gens = Integer.MAX_VALUE; // maximum number of generations
         int disc = (int) (Math.ceil(pop * 0.8)); // chromosomes discarded via elitism
-        int dimw = items.size();
-        int best = 0, ind = 0, ind2 = 0; // a few helpers for the main()
+        int size = items.size();
+        int ind = 0, ind2 = 0; // a few helpers for the main()
         int parc = 0; // parent index for crossover
         double avg = 0, crp = 0.35; // crossover probability
-        List<Chromo> ch = new ArrayList<>();
+
+        int sameResultCounter = 0;
+        Chromo lastResult = new Chromo(size);
+        Chromo best = new Chromo(size);
+
+        List<Chromo> chromos = new ArrayList<>();
         for (int i = 0; i < pop; i++) {
-            ch.add(new Chromo(dimw));
+            chromos.add(new Chromo(size));
         }
-        boolean[][] c = new boolean[pop][dimw];
+        boolean[][] c = new boolean[pop][size];
         System.out.println("Initializing population with a greedy algorithm...");
-        initpopg(c, items, dimw, limit, pop);
+        initpopg(c, items, size, maxWeight, pop);
         System.out.println("done!");
         for (int i = 0; i < pop; i++) {
-            ch.get(i).items = c[i];
-            ch.get(i).f = fitness(ch.get(i).items, dimw, items, limit);
+            chromos.get(i).items = c[i];
+            chromos.get(i).fitness = fitness(chromos.get(i).items, size, items, maxWeight);
         }
         System.out.println("\n\n");
 
-        for (int p = 0; p < gens; p++) {
-            Collections.sort(ch, new Comparator<Chromo>() {
+        for (int generationNumber = 0; generationNumber < gens; generationNumber++) {
+            Collections.sort(chromos, new Comparator<Chromo>() {
                 @Override
                 public int compare(Chromo c1, Chromo c2) {
-                    return c1.f - c2.f;
+                    return c2.fitness - c1.fitness;
                 }
             });
-            for (int i = 0; i < pop; i++) {
-                if (i > pop - disc) { // elitism - only processes the discarded chromosomes
+            for (int populationNumber = 0; populationNumber < pop; populationNumber++) {
+                if (populationNumber > pop - disc) { // elitism - only processes the discarded chromosomes
                     if (coin(crp) == 1) { // crossover section
-                        ind = parc + Math.round(10 * random); // choosing parents for crossover
-                        ind2 = parc + 1 + Math.round(10 * random);
+                        ind = parc + (int) Math.round(10 * random); // choosing parents for crossover
+                        ind2 = parc + 1 + (int) Math.round(10 * random);
                         // choose a crossover strategy here
-                        crossover1p(ch.get(ind % pop), ch.get(ind2 % pop), ch.get(i), dimw, Math.round(random * (dimw - 1)));
-                        /*
-                        crossoverrand(ch[ind],ch[ind2],ch[i],dimw);
-                        crossoverarit(ch[0],ch[1],ch[i],dimw);
+                        crossover1p(chromos.get(ind % pop), chromos.get(ind2 % pop), chromos.get(populationNumber), size, (int) Math.round(random * (size - 1)));
+                       /*
+                        crossover1p_b(chromos.get(ind % pop), chromos.get(ind2 % pop), chromos.get(populationNumber), size, (int) Math.round(random * (size - 1)));
+                        crossoverrand(chromos.get(ind),chromos.get(ind2),chromos.get(populationNumber),size);
+                        crossoverarit(chromos.get(0),chromos.get(1),chromos.get(populationNumber),size);
                          */
-                        ch.get(i).f = fitness(ch.get(i).items, dimw, items, limit);
+                        chromos.get(populationNumber).fitness = fitness(chromos.get(populationNumber).items, size, items, maxWeight);
                         parc += 1;
                     } else { // mutation section
-                        ch.get(i).mutate(dimw, 1);
-                        ch.get(i).f = fitness(ch.get(i).items, dimw, items, limit);
+                        chromos.get(populationNumber).mutate(size, 1);
+                        chromos.get(populationNumber).fitness = fitness(chromos.get(populationNumber).items, size, items, maxWeight);
                     }
                 }
-                avg += ch.get(i).f;
-                if (ch.get(i).f > best) {
-                    best = ch.get(i).f;
+                avg += chromos.get(populationNumber).fitness;
+                if (chromos.get(populationNumber).fitness > best.fitness) {
+                    best = chromos.get(populationNumber);
                 }
             }
             parc = 0;
-            if (p % 5 == 0) {
-                System.out.println("" + p);
-                System.out.println("best fitness: " + best);
-                System.out.println("avg fitness: " + (avg / pop));
-                if (best == 675) {
-                    return;
-                }
+            if (best.equals(lastResult)) {
+                sameResultCounter++;
+            } else {
+                lastResult = best;
+                sameResultCounter = 0;
             }
-            best = 0;
+            if (generationNumber % 5 == 0) {
+                connectionHandler.saveResult(best, size);
+                System.out.println("" + generationNumber);
+                System.out.println("best fitness: " + best.fitness);
+                System.out.println("avg fitness: " + (avg / pop));
+            }
+            if(sameResultCounter == MAX_SAME_RESULT){
+                System.out.println("Limit reached!");
+                break;
+            }
             avg = 0;
         }
     }
@@ -154,17 +169,17 @@ public class KnapsackSolver {
             }
         }
     }
-/*
-    private void crossoverrand(Chromo c1, Chromo c2, Chromo c3, int dimc) {
-        for (int i = 0; i < dimc; i++) {
-            if (Math.round(random)) {
-                c3.items[i] = c1.items[i];
-            } else {
-                c3.items[i] = c2.items[i];
+
+        private void crossoverrand(Chromo c1, Chromo c2, Chromo c3, int dimc) {
+            for (int i = 0; i < dimc; i++) {
+                if ((int)Math.round(random) == 1) {
+                    c3.items[i] = c1.items[i];
+                } else {
+                    c3.items[i] = c2.items[i];
+                }
             }
         }
-    }
-*/
+
     private void crossoverarit(Chromo c1, Chromo c2, Chromo c3, int dimc) {
         for (int i = 0; i < dimc; i++) {
             c3.items[i] = (c1.items[i] ^ c2.items[i]);
@@ -180,12 +195,12 @@ public class KnapsackSolver {
         List<Pair<Integer, Double>> rvals = new ArrayList<>(dimw);
         int[] index = new int[dimw];
         for (int i = 0; i < dimw; i++) {
-            rvals.add(new Pair<>(i, (double) items.get(i).getProfit() / (double) items.get(i).getProfit()));
+            rvals.add(new Pair<>(i, (double) items.get(i).getProfit() / (double) items.get(i).getWeight()));
         }
         Collections.sort(rvals, new Comparator<Pair<Integer, Double>>() {
             @Override
             public int compare(Pair<Integer, Double> r1, Pair<Integer, Double> r2) {
-                return (int) Math.round(r1.second - r2.second);
+                return (int) Math.round(r2.second - r1.second);
             }
         });
         int currentWeight = 0, k;
@@ -205,20 +220,7 @@ public class KnapsackSolver {
 
     private class Chromo {
 
-        boolean[] items;
-        int f;
 
-        public Chromo(int dimc) {
-            this.items = new boolean[dimc];
-        }
-
-        public void mutate(int dimc, int count) {
-            int mi;
-            for (int i = 0; i < count; i++) {
-                mi = (int) (Math.round(random * (dimc - 1)));
-                items[mi] = !items[mi];
-            }
-        }
     }
 
     private class Pair<T, V> {
