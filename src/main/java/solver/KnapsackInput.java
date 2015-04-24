@@ -1,3 +1,7 @@
+package solver;
+
+import solver.Item;
+
 import java.util.ArrayList;
 import java.util.List;
 

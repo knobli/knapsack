@@ -1,3 +1,5 @@
+package solver;
+
 /**
  * Created by knobli on 22.04.2015.
  */

@@ -1,3 +1,7 @@
+package solver;
+
+import service.IConnectionHandler;
+
 import java.util.*;
 
 /**
@@ -8,25 +12,26 @@ public class KnapsackSolver {
 
     private static final int MAX_SAME_RESULT = 100;
 
-    private final ConnectionHandler connectionHandler;
-    private final List<Item> items;
-    private final int maxWeight;
-    private double random = 0;
+    private IConnectionHandler connectionHandler;
     private boolean debug = false;
 
-    public KnapsackSolver(ConnectionHandler connectionHandler, KnapsackInput knapsackInput) {
+    public IConnectionHandler getConnectionHandler() {
+        return connectionHandler;
+    }
+
+    public void setConnectionHandler(IConnectionHandler connectionHandler) {
         this.connectionHandler = connectionHandler;
-        this.items = knapsackInput.getItems();
-        this.maxWeight = knapsackInput.getMaxWeight();
-        Random random = new Random();
-        this.random = random.nextInt(10000) / 10000;
     }
 
     public void setDebug(boolean debug) {
         this.debug = debug;
     }
 
-    public void run() {
+    public int run(String problemId) {
+        KnapsackInput knapsackInput = connectionHandler.getKnapsackInput(problemId);
+        final List<Item> items = knapsackInput.getItems();
+        final int maxWeight = knapsackInput.getMaxWeight();
+
         int size = items.size(); // Get the total number of items. Could be wt.length or val.length. Doesn't matter
         int[][] vector = new int[size + 1][maxWeight + 1]; //Create a matrix. Items are in rows and weight at in columns +1 on each side
         //What if the knapsack's capacity is 0 - Set all columns at row 0 to be 0
@@ -53,15 +58,24 @@ public class KnapsackSolver {
             }
         }
         //Printing the matrix
-        for (int[] rows : vector) {
-            for (int col : rows) {
-                System.out.format("%5d", col);
+        if (debug) {
+            for (int[] rows : vector) {
+                for (int col : rows) {
+                    System.out.format("%5d", col);
+                }
+                System.out.println();
             }
-            System.out.println();
         }
+        return vector[size][maxWeight];
     }
 
-    public void run2() {
+    public Chromo run2(String problemId) {
+        KnapsackInput knapsackInput = connectionHandler.getKnapsackInput(problemId);
+        final List<Item> items = knapsackInput.getItems();
+        final int maxWeight = knapsackInput.getMaxWeight();
+        Random randomGenerator = new Random();
+        double random = randomGenerator.nextInt(10000) / 10000;
+
         int pop = 250; // chromosome population size
         int gens = Integer.MAX_VALUE; // maximum number of generations
         int disc = (int) (Math.ceil(pop * 0.8)); // chromosomes discarded via elitism
@@ -97,14 +111,14 @@ public class KnapsackSolver {
             });
             for (int populationNumber = 0; populationNumber < pop; populationNumber++) {
                 if (populationNumber > pop - disc) { // elitism - only processes the discarded chromosomes
-                    if (coin(crp) == 1) { // crossover section
+                    if (coin(crp, random) == 1) { // crossover section
                         ind = parc + (int) Math.round(10 * random); // choosing parents for crossover
                         ind2 = parc + 1 + (int) Math.round(10 * random);
                         // choose a crossover strategy here
                         crossover1p(chromos.get(ind % pop), chromos.get(ind2 % pop), chromos.get(populationNumber), size, (int) Math.round(random * (size - 1)));
                        /*
                         crossover1p_b(chromos.get(ind % pop), chromos.get(ind2 % pop), chromos.get(populationNumber), size, (int) Math.round(random * (size - 1)));
-                        crossoverrand(chromos.get(ind),chromos.get(ind2),chromos.get(populationNumber),size);
+                        crossoverrand(chromos.get(ind),chromos.get(ind2),chromos.get(populationNumber),size, random);
                         crossoverarit(chromos.get(0),chromos.get(1),chromos.get(populationNumber),size);
                          */
                         chromos.get(populationNumber).setFitness(fitness(chromos.get(populationNumber).getItems(), size, items, maxWeight));
@@ -127,7 +141,7 @@ public class KnapsackSolver {
                 sameResultCounter = 0;
             }
             if (generationNumber % 20 == 0) {
-                connectionHandler.saveDraftResult(best, items);
+                getConnectionHandler().saveDraftResult(best, items);
                 if (debug) {
                     System.out.println("" + generationNumber);
                     System.out.println("best fitness: " + best.getFitness());
@@ -140,7 +154,8 @@ public class KnapsackSolver {
             }
             avg = 0;
         }
-        connectionHandler.saveResult(best, items);
+        getConnectionHandler().saveResult(best, items);
+        return best;
     }
 
     private int fitness(boolean[] x, int dimc, List<Item> items, int limit) {
@@ -176,7 +191,7 @@ public class KnapsackSolver {
         }
     }
 
-    private void crossoverrand(Chromo c1, Chromo c2, Chromo c3, int dimc) {
+    private void crossoverrand(Chromo c1, Chromo c2, Chromo c3, int dimc, double random) {
         for (int i = 0; i < dimc; i++) {
             if ((int) Math.round(random) == 1) {
                 c3.getItems()[i] = c1.getItems()[i];
@@ -192,7 +207,7 @@ public class KnapsackSolver {
         }
     }
 
-    private int coin(double crp) { // a cointoss
+    private int coin(double crp, double random) { // a cointoss
         if (random < crp) return 1; // crossover
         else return 0; // mutation
     }
@@ -206,7 +221,7 @@ public class KnapsackSolver {
         Collections.sort(profitWeightRatios, new Comparator<Pair<Integer, Double>>() {
             @Override
             public int compare(Pair<Integer, Double> r1, Pair<Integer, Double> r2) {
-                return (int) Math.round(r2.second - r1.second);
+                return r2.second.compareTo(r1.second);
             }
         });
         int currentWeight = 0, k;
